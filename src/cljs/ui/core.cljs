@@ -13,8 +13,12 @@
                            onMouseOverE onMouseOutE onHoverE onActiveE domAttr
                            domRemoveAttr domCss domAddClass domRemoveClass
                            domToggleClass domToggle domSlideToggle domText
-                           domValue domValueB doInitE]]
+                           domValue domValueB doInitE onDblClickE onSubmitE]]
     [flapjax.dom    :only [id! add-class! dom-get value!]]))
+
+(def trans
+  "Matrix transpose."
+  (partial apply map vector))
 
 (defn make-input
   ([e] 
@@ -132,14 +136,24 @@
     {:options   (mapv wireup options values)
      :values    values}))
 
+(defn- make-select-by
+  "A select is..."
+  [f & optvals]
+  (let [deck    (apply make-deck optvals)
+        wireup  (fn [e v]
+                  (mapE #(sendE (:selectE deck) v) (f e))
+                  (-> e make-clickable make-hoverable))]
+    (assoc deck :options (mapv wireup (:options deck) (:values deck)))))
+
 (defn make-select
   "A select is..."
   [& optvals]
-  (let [deck    (apply make-deck optvals)
-        wireup  (fn [e v]
-                  (mapE #(sendE (:selectE deck) v) (onClickE e))
-                  (-> e make-clickable make-hoverable))]
-    (assoc deck :options (mapv wireup (:options deck) (:values deck)))))
+  (apply make-select-by onClickE optvals))
+
+(defn make-select-dblclick
+  "A select is..."
+  [& optvals]
+  (apply make-select-by onDblClickE optvals))
 
 (defn make-restricted-select
   [select]
@@ -176,3 +190,17 @@
         deck    (apply make-deck (interleave containers values))]
     (mapE #(sendE (:selectE deck) %) (B->E (:selectedB select)))
     (assoc select :containers (:options deck))))
+
+(defn make-form
+  "Wire up a form to call a function with arguments supplied by the form's
+  input elements when the form is submitted."
+  [f form & inputs]
+  (let [form      (id! form)
+        trigE     (onSubmitE form)
+        [es bs]   (trans (map (comp (juxt :elem :valB) make-input) inputs)) 
+        argB      (apply liftB vector bs)
+        argE      (mapE (fn [_] (valueNow argB)) trigE)]
+    (mapE (partial apply f) argE)
+    {:form    form
+     :inputs  es}))
+
